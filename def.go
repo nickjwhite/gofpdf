@@ -116,6 +116,27 @@ const (
 	AlignBaseline = "B"
 )
 
+// TextRenderingModes for the SetTextRenderingMode() function, as
+// defined in section 9.3.6 of the PDF specification.
+const (
+	// TextRenderingModeFill fills text
+	TextRenderingModeFill = 0
+	// TextRenderingModeStroke strokes text
+	TextRenderingModeStroke = 1
+	// TextRenderingModeFillStroke fills then strokes text
+	TextRenderingModeFillStroke = 2
+	// TextRenderingModeInvisible neither fills nor strokes text
+	TextRenderingModeInvisible = 3
+	// TextRenderingFillClip fills text and add to path for clipping
+	TextRenderingModeFillClip = 4
+	// TextRenderingFillClip strokes text and add to path for clipping
+	TextRenderingModeStrokeClip = 5
+	// TextRenderingModeFillStrokeClip fills then strokes text and add to path for clipping
+	TextRenderingModeFillStrokeClip = 6
+	// TextRenderingModeClip Adds text to path for clipping
+	TextRenderingModeClip = 7
+)
+
 type colorMode int
 
 const (

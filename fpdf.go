@@ -2227,15 +2227,7 @@ func (f *Fpdf) SetWordSpacing(space float64) {
 }
 
 // SetTextRenderingMode sets the rendering mode of following text.
-// The mode can be as follows:
-// 0: Fill text
-// 1: Stroke text
-// 2: Fill, then stroke text
-// 3: Neither fill nor stroke text (invisible)
-// 4: Fill text and add to path for clipping
-// 5: Stroke text and add to path for clipping
-// 6: Fills then stroke text and add to path for clipping
-// 7: Add text to path for clipping
+// See the TextRenderingMode* const definitions for modes.
 func (f *Fpdf) SetTextRenderingMode(mode int) {
 	f.out(sprintf("%d Tr", mode))
 }
