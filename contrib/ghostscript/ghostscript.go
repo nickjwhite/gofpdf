@@ -9,7 +9,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/phpdave11/gofpdf"
+	"github.com/nickjwhite/gofpdf"
 )
 
 func report(fileStr string, err error) {
