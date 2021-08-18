@@ -14,12 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package gofpdf
+package fpdf
 
 import (
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -238,7 +238,7 @@ func SVGBasicParse(buf []byte) (sig SVGBasicType, err error) {
 // basic descriptor. The SVGBasicWrite() example demonstrates this method.
 func SVGBasicFileParse(svgFileStr string) (sig SVGBasicType, err error) {
 	var buf []byte
-	buf, err = ioutil.ReadFile(svgFileStr)
+	buf, err = os.ReadFile(svgFileStr)
 	if err == nil {
 		sig, err = SVGBasicParse(buf)
 	}

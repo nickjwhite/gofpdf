@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package gofpdf
+package fpdf
 
 // Utility to generate font definition files
 
@@ -30,7 +30,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -94,7 +93,7 @@ func getInfoFromTrueType(fileStr string, msgWriter io.Writer, embed bool, encLis
 			err = fmt.Errorf("font license does not allow embedding")
 			return
 		}
-		info.Data, err = ioutil.ReadFile(fileStr)
+		info.Data, err = os.ReadFile(fileStr)
 		if err != nil {
 			return
 		}
@@ -372,12 +371,13 @@ func makeDefinitionFile(fileStr, tpStr, encodingFileStr string, embed bool, encL
 	if err != nil {
 		return err
 	}
+
 	err = f.Close()
 	if err != nil {
 		return err
 	}
 
-	return err
+	return nil
 }
 
 // MakeFont generates a font definition file in JSON format. A definition file
@@ -405,7 +405,7 @@ func makeDefinitionFile(fileStr, tpStr, encodingFileStr string, embed bool, encL
 // embed is true if the font is to be embedded in the PDF files.
 func MakeFont(fontFileStr, encodingFileStr, dstDirStr string, msgWriter io.Writer, embed bool) error {
 	if msgWriter == nil {
-		msgWriter = ioutil.Discard
+		msgWriter = io.Discard
 	}
 	if !fileExist(fontFileStr) {
 		return fmt.Errorf("font file not found: %s", fontFileStr)

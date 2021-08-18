@@ -3,8 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/phpdave11/gofpdf"
 	"os"
+
+	"github.com/go-pdf/fpdf"
 )
 
 func errPrintf(fmtStr string, args ...interface{}) {
@@ -25,23 +26,6 @@ func showHelp() {
 	errPrintf("\nExample: %s --embed --enc=../font/cp1252.map --dst=../font calligra.ttf /opt/font/symbol.pfb\n", os.Args[0])
 }
 
-func tutorialSummary(f *gofpdf.Fpdf, fileStr string) {
-	if f.Ok() {
-		fl, err := os.Create(fileStr)
-		defer fl.Close()
-		if err == nil {
-			f.Output(fl)
-		} else {
-			f.SetError(err)
-		}
-	}
-	if f.Ok() {
-		fmt.Printf("Successfully generated %s\n", fileStr)
-	} else {
-		errPrintf("%s\n", f.Error())
-	}
-}
-
 func main() {
 	var dstDirStr, encodingFileStr string
 	var err error
@@ -57,7 +41,7 @@ func main() {
 		args := flag.Args()
 		if len(args) > 0 {
 			for _, fileStr := range args {
-				err = gofpdf.MakeFont(fileStr, encodingFileStr, dstDirStr, os.Stderr, embed)
+				err = fpdf.MakeFont(fileStr, encodingFileStr, dstDirStr, os.Stderr, embed)
 				if err != nil {
 					errPrintf("%s\n", err)
 				}

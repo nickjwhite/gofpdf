@@ -1,12 +1,9 @@
-package gofpdf
+package fpdf
 
 import (
 	"math"
 	"strconv"
 )
-
-func unused(args ...interface{}) {
-}
 
 // RGBType holds fields for red, green and blue color components (0..255)
 type RGBType struct {

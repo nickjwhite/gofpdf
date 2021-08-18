@@ -14,12 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package gofpdf
+package fpdf
 
 import (
 	"bufio"
 	"bytes"
-	"compress/zlib"
 	"fmt"
 	"io"
 	"math"
@@ -27,6 +26,18 @@ import (
 	"path/filepath"
 	"strings"
 )
+
+func must(n int, err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+func must64(n int64, err error) {
+	if err != nil {
+		panic(err)
+	}
+}
 
 func round(f float64) int {
 	if f < 0 {
@@ -57,50 +68,6 @@ func fileSize(filename string) (size int64, ok bool) {
 	ok = err == nil
 	if ok {
 		size = info.Size()
-	}
-	return
-}
-
-// bufferFromReader returns a new buffer populated with the contents of the specified Reader
-func bufferFromReader(r io.Reader) (b *bytes.Buffer, err error) {
-	b = new(bytes.Buffer)
-	_, err = b.ReadFrom(r)
-	return
-}
-
-// slicesEqual returns true if the two specified float slices are equal
-func slicesEqual(a, b []float64) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// sliceCompress returns a zlib-compressed copy of the specified byte array
-func sliceCompress(data []byte) []byte {
-	var buf bytes.Buffer
-	cmp, _ := zlib.NewWriterLevel(&buf, zlib.BestSpeed)
-	cmp.Write(data)
-	cmp.Close()
-	return buf.Bytes()
-}
-
-// sliceUncompress returns an uncompressed copy of the specified zlib-compressed byte array
-func sliceUncompress(data []byte) (outData []byte, err error) {
-	inBuf := bytes.NewReader(data)
-	r, err := zlib.NewReader(inBuf)
-	defer r.Close()
-	if err == nil {
-		var outBuf bytes.Buffer
-		_, err = outBuf.ReadFrom(r)
-		if err == nil {
-			outData = outBuf.Bytes()
-		}
 	}
 	return
 }

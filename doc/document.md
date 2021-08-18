@@ -1,13 +1,12 @@
 # GoFPDF document generator
 
-[![No Maintenance Intended][badge-no-maintain]][unmaintained]
 [![MIT licensed][badge-mit]][license]
 [![Report][badge-report]][report]
 [![GoDoc][badge-doc]][godoc]
 
 ![][logo]
 
-Package gofpdf implements a PDF document generator with high level support for
+Package `go-pdf/fpdf` implements a PDF document generator with high level support for
 text, drawing and images.
 
 ## Features
@@ -32,10 +31,10 @@ text, drawing and images.
 * Charting facility
 * Import PDFs as templates
 
-gofpdf has no dependencies other than the Go standard library. All tests pass
+`go-pdf/fpdf` has no dependencies other than the Go standard library. All tests pass
 on Linux, Mac and Windows platforms.
 
-gofpdf supports UTF-8 TrueType fonts and "right-to-left" languages. Note that
+`go-pdf/fpdf` supports UTF-8 TrueType fonts and "right-to-left" languages. Note that
 Chinese, Japanese, and Korean characters may not be included in many general
 purpose fonts. For these languages, a specialized font (for example,
 [NotoSansSC][noto] for simplified Chinese) can be used.
@@ -43,35 +42,18 @@ purpose fonts. For these languages, a specialized font (for example,
 Also, support is provided to automatically translate UTF-8 runes to code page
 encodings for languages that have fewer than 256 glyphs.
 
-## We Are Closed
-
-This repository will not be maintained, at least for some unknown duration. But
-it is hoped that gofpdf has a bright future in the open source world. Due to
-Go's promise of compatibility, gofpdf should continue to function without
-modification for a longer time than would be the case with many other
-languages.
-
-Forks should be based on the [last viable commit][last-commit]. Tools such as
-[active-forks][gofpdf-fork] can be used to select a fork that looks promising
-for your needs. If a particular fork looks like it has taken the lead in
-attracting followers, this README will be updated to point people in that
-direction.
-
-The efforts of all contributors to this project have been deeply appreciated.
-Best wishes to all of you.
-
 ## Installation
 
 To install the package on your system, run
 
 ```shell
-go get github.com/phpdave11/gofpdf
+go get github.com/go-pdf/fpdf
 ```
 
 Later, to receive updates, run
 
 ```shell
-go get -u -v github.com/phpdave11/gofpdf/...
+go get -u -v github.com/go-pdf/fpdf/...
 ```
 
 ## Quick Start
@@ -79,7 +61,7 @@ go get -u -v github.com/phpdave11/gofpdf/...
 The following Go code generates a simple PDF file.
 
 ```go
-pdf := gofpdf.New("P", "mm", "A4", "")
+pdf := fpdf.New("P", "mm", "A4", "")
 pdf.AddPage()
 pdf.SetFont("Arial", "B", 16)
 pdf.Cell(40, 10, "Hello, world")
@@ -125,7 +107,7 @@ rather than PHP.
 ## Example PDFs
 
 A side effect of running `go test ./...` is the production of a number of
-example PDFs. These can be found in the gofpdf/pdf directory after the tests
+example PDFs. These can be found in the go-pdf/fpdf/pdf directory after the tests
 complete.
 
 Please note that these examples run in the context of a test. In order run an
@@ -135,7 +117,7 @@ example as a standalone application, you'll need to examine
 
 Example PDFs can be compared with reference copies in order to verify that they
 have been generated as expected. This comparison will be performed if a PDF
-with the same name as the example PDF is placed in the gofpdf/pdf/reference
+with the same name as the example PDF is placed in the go-pdf/fpdf/pdf/reference
 directory and if the third argument to `ComparePDFFiles()` in
 internal/example/example.go is true. (By default it is false.) The routine that
 summarizes an example will look for this file and, if found, will call
@@ -178,12 +160,12 @@ fonts include [Google Fonts][gfont] and [DejaVu Fonts][dfont].
 ## Related Packages
 
 The [draw2d][draw2d-site] package is a two dimensional vector graphics library that
-can generate output in different forms. It uses gofpdf for its document
+can generate output in different forms. It uses go-pdf/fpdf for its document
 production mode.
 
 ## Contributing Changes
 
-gofpdf is a global community effort and you are invited to make it even better.
+`go-pdf/fpdf` is a global community effort and you are invited to make it even better.
 If you have implemented a new feature or corrected a problem, please consider
 contributing your change to the project. A contribution that does not directly
 pertain to the core functionality of gofpdf should be placed in its own
@@ -261,28 +243,27 @@ for file attachments and annotations.
 [badge-github]: https://img.shields.io/badge/project-Git_Hub-blue.svg
 [badge-mit]: https://img.shields.io/badge/license-MIT-blue.svg
 [badge-no-maintain]: http://unmaintained.tech/badge.svg
-[badge-report]: https://goreportcard.com/badge/github.com/phpdave11/gofpdf
-[badge-status]: https://travis-ci.org/phpdave11/gofpdf.svg?branch=master
+[badge-report]: https://goreportcard.com/badge/github.com/go-pdf/fpdf
+[badge-status]: https://travis-ci.org/go-pdf/fpdf.svg?branch=master
 [coverage]: https://blog.golang.org/cover
 [dfont]: http://dejavu-fonts.org/
 [draw2d-site]: https://github.com/llgcode/draw2d
 [effective-go]: https://golang.org/doc/effective_go.html 
 [fpdf-site]: http://www.fpdf.org/
-[fpdf-test]: https://github.com/phpdave11/gofpdf/blob/master/fpdf_test.go
+[fpdf-test]: https://github.com/go-pdf/fpdf/blob/master/fpdf_test.go
 [gfont]: https://fonts.google.com/
-[github]: https://github.com/phpdave11/gofpdf
-[godoc]: https://godoc.org/github.com/phpdave11/gofpdf
-[gofpdf-fork]: https://techgaun.github.io/active-forks/index.html#phpdave11/gofpdf
+[github]: https://github.com/go-pdf/fpdf
+[godoc]: https://godoc.org/github.com/go-pdf/fpdf
 [issue109]: https://github.com/phpdave11/gofpdf/issues/109
 [jung]: https://github.com/phpdave11/
-[last-commit]: https://github.com/phpdave11/gofpdf/commit/603f56990463f011cb1dbb64ef7f872c1adc009a
-[license]: https://raw.githubusercontent.com/phpdave11/gofpdf/master/LICENSE
+[last-commit]: https://github.com/go-pdf/fpdf/commit/603f56990463f011cb1dbb64ef7f872c1adc009a
+[license]: https://raw.githubusercontent.com/go-pdf/fpdf/master/LICENSE
 [lint]: https://github.com/golang/lint
-[logo]: https://github.com/phpdave11/gofpdf/raw/master/image/logo_gofpdf.jpg?raw=true
+[logo]: https://github.com/go-pdf/fpdf/raw/master/image/logo_gofpdf.jpg
 [noto]: https://github.com/jsntn/webfonts/blob/master/NotoSansSC-Regular.ttf
 [pr]: https://help.github.com/articles/using-pull-requests/
-[report]: https://goreportcard.com/report/github.com/phpdave11/gofpdf
-[status]: https://travis-ci.org/phpdave11/gofpdf
-[test]: https://github.com/phpdave11/gofpdf/blob/master/fpdf_test.go
+[report]: https://goreportcard.com/report/github.com/go-pdf/fpdf
+[status]: https://travis-ci.org/go-pdf/fpdf
+[test]: https://github.com/go-pdf/fpdf/blob/master/fpdf_test.go
 [unmaintained]: http://unmaintained.tech/
 [vet]: https://golang.org/cmd/vet/

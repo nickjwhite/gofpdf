@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package gofpdf
+package fpdf
 
 import (
 	"bytes"
@@ -121,7 +121,6 @@ type colorMode int
 const (
 	colorModeRGB colorMode = iota
 	colorModeSpot
-	colorModeCMYK
 )
 
 type colorType struct {
@@ -139,7 +138,7 @@ type spotColorType struct {
 	val       cmykColorType
 }
 
-// CMYKColorType specifies an ink-based CMYK color value
+// cmykColorType specifies an ink-based CMYK color value
 type cmykColorType struct {
 	c, m, y, k byte // 0% to 100%
 }
@@ -602,6 +601,11 @@ type Fpdf struct {
 	}
 	spotColorMap           map[string]spotColorType // Map of named ink-based colors
 	userUnderlineThickness float64                  // A custom user underline thickness multiplier.
+
+	fmt struct {
+		buf []byte       // buffer used to format numbers.
+		col bytes.Buffer // buffer used to build color strings.
+	}
 }
 
 type encType struct {

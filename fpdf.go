@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package gofpdf
+package fpdf
 
 // Version: 1.7
 // Date:    2011-06-18
@@ -23,7 +23,6 @@ package gofpdf
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -32,7 +31,6 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"path"
@@ -86,13 +84,13 @@ func fpdfNew(orientationStr, unitStr, sizeStr, fontDirStr string, size SizeType)
 	f.diffs = make([]string, 0, 8)
 	f.templates = make(map[string]Template)
 	f.templateObjects = make(map[string]int)
-	f.importedObjs = make(map[string][]byte, 0)
-	f.importedObjPos = make(map[string]map[int]string, 0)
+	f.importedObjs = make(map[string][]byte)
+	f.importedObjPos = make(map[string]map[int]string)
 	f.importedTplObjs = make(map[string]string)
-	f.importedTplIDs = make(map[string]int, 0)
+	f.importedTplIDs = make(map[string]int)
 	f.images = make(map[string]*ImageInfoType)
 	f.pageLinks = make([][]linkType, 0, 8)
-	f.pageLinks = append(f.pageLinks, make([]linkType, 0, 0)) // pageLinks[0] is unused (1-based)
+	f.pageLinks = append(f.pageLinks, make([]linkType, 0)) // pageLinks[0] is unused (1-based)
 	f.links = make([]intLinkType, 0, 8)
 	f.links = append(f.links, intLinkType{}) // links[0] is unused (1-based)
 	f.pageAttachments = make([][]annotationAttach, 0, 8)
@@ -208,6 +206,11 @@ func fpdfNew(orientationStr, unitStr, sizeStr, fontDirStr string, size SizeType)
 	f.creationDate = gl.creationDate
 	f.modDate = gl.modDate
 	f.userUnderlineThickness = 1
+
+	// create a large enough buffer for formatting float64s.
+	// math.MaxInt64  needs 19.
+	// math.MaxUint64 needs 20.
+	f.fmt.buf = make([]byte, 24)
 	return
 }
 
@@ -704,7 +707,6 @@ func (f *Fpdf) Close() {
 	f.endpage()
 	// Close document
 	f.enddoc()
-	return
 }
 
 // PageSize returns the width and height of the specified page in the units
@@ -832,7 +834,6 @@ func (f *Fpdf) AddPageFormat(orientationStr string, size SizeType) {
 	}
 	f.color.text = tc
 	f.colorFlag = cf
-	return
 }
 
 // AddPage adds a new page to the document. If a page is already present, the
@@ -855,7 +856,6 @@ func (f *Fpdf) AddPage() {
 	}
 	// dbg("AddPage")
 	f.AddPageFormat(f.defOrientation, f.defPageSize)
-	return
 }
 
 // PageNo returns the current page number.
@@ -874,20 +874,42 @@ func colorComp(v int) (int, float64) {
 	return v, float64(v) / 255.0
 }
 
-func rgbColorValue(r, g, b int, grayStr, fullStr string) (clr colorType) {
+func (f *Fpdf) rgbColorValue(r, g, b int, grayStr, fullStr string) (clr colorType) {
 	clr.ir, clr.r = colorComp(r)
 	clr.ig, clr.g = colorComp(g)
 	clr.ib, clr.b = colorComp(b)
 	clr.mode = colorModeRGB
 	clr.gray = clr.ir == clr.ig && clr.r == clr.b
+	const prec = 3
 	if len(grayStr) > 0 {
 		if clr.gray {
-			clr.str = sprintf("%.3f %s", clr.r, grayStr)
+			// clr.str = sprintf("%.3f %s", clr.r, grayStr)
+			f.fmt.col.Reset()
+			f.fmt.col.WriteString(f.fmtF64(clr.r, prec))
+			f.fmt.col.WriteString(" ")
+			f.fmt.col.WriteString(grayStr)
+			clr.str = f.fmt.col.String()
 		} else {
-			clr.str = sprintf("%.3f %.3f %.3f %s", clr.r, clr.g, clr.b, fullStr)
+			// clr.str = sprintf("%.3f %.3f %.3f %s", clr.r, clr.g, clr.b, fullStr)
+			f.fmt.col.Reset()
+			f.fmt.col.WriteString(f.fmtF64(clr.r, prec))
+			f.fmt.col.WriteString(" ")
+			f.fmt.col.WriteString(f.fmtF64(clr.g, prec))
+			f.fmt.col.WriteString(" ")
+			f.fmt.col.WriteString(f.fmtF64(clr.b, prec))
+			f.fmt.col.WriteString(" ")
+			f.fmt.col.WriteString(fullStr)
+			clr.str = f.fmt.col.String()
 		}
 	} else {
-		clr.str = sprintf("%.3f %.3f %.3f", clr.r, clr.g, clr.b)
+		// clr.str = sprintf("%.3f %.3f %.3f", clr.r, clr.g, clr.b)
+		f.fmt.col.Reset()
+		f.fmt.col.WriteString(f.fmtF64(clr.r, prec))
+		f.fmt.col.WriteString(" ")
+		f.fmt.col.WriteString(f.fmtF64(clr.g, prec))
+		f.fmt.col.WriteString(" ")
+		f.fmt.col.WriteString(f.fmtF64(clr.b, prec))
+		clr.str = f.fmt.col.String()
 	}
 	return
 }
@@ -901,7 +923,7 @@ func (f *Fpdf) SetDrawColor(r, g, b int) {
 }
 
 func (f *Fpdf) setDrawColor(r, g, b int) {
-	f.color.draw = rgbColorValue(r, g, b, "G", "RG")
+	f.color.draw = f.rgbColorValue(r, g, b, "G", "RG")
 	if f.page > 0 {
 		f.out(f.color.draw.str)
 	}
@@ -923,7 +945,7 @@ func (f *Fpdf) SetFillColor(r, g, b int) {
 }
 
 func (f *Fpdf) setFillColor(r, g, b int) {
-	f.color.fill = rgbColorValue(r, g, b, "g", "rg")
+	f.color.fill = f.rgbColorValue(r, g, b, "g", "rg")
 	f.colorFlag = f.color.fill.str != f.color.text.str
 	if f.page > 0 {
 		f.out(f.color.fill.str)
@@ -945,7 +967,7 @@ func (f *Fpdf) SetTextColor(r, g, b int) {
 }
 
 func (f *Fpdf) setTextColor(r, g, b int) {
-	f.color.text = rgbColorValue(r, g, b, "g", "rg")
+	f.color.text = f.rgbColorValue(r, g, b, "g", "rg")
 	f.colorFlag = f.color.fill.str != f.color.text.str
 }
 
@@ -974,8 +996,7 @@ func (f *Fpdf) GetStringSymbolWidth(s string) int {
 	}
 	w := 0
 	if f.isCurrentUTF8 {
-		unicode := []rune(s)
-		for _, char := range unicode {
+		for _, char := range s {
 			intChar := int(char)
 			if len(f.currentFont.Cw) >= intChar && f.currentFont.Cw[intChar] > 0 {
 				if f.currentFont.Cw[intChar] != 65535 {
@@ -1008,7 +1029,7 @@ func (f *Fpdf) SetLineWidth(width float64) {
 func (f *Fpdf) setLineWidth(width float64) {
 	f.lineWidth = width
 	if f.page > 0 {
-		f.outf("%.2f w", width*f.k)
+		f.out(f.fmtF64(width*f.k, 2) + " w")
 	}
 }
 
@@ -1097,7 +1118,16 @@ func (f *Fpdf) outputDashPattern() {
 // Line draws a line between points (x1, y1) and (x2, y2) using the current
 // draw color, line width and cap style.
 func (f *Fpdf) Line(x1, y1, x2, y2 float64) {
-	f.outf("%.2f %.2f m %.2f %.2f l S", x1*f.k, (f.h-y1)*f.k, x2*f.k, (f.h-y2)*f.k)
+	// f.outf("%.2f %.2f m %.2f %.2f l S", x1*f.k, (f.h-y1)*f.k, x2*f.k, (f.h-y2)*f.k)
+	const prec = 2
+	f.putF64(x1*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-y1)*f.k, prec)
+	f.put(" m ")
+	f.putF64(x2*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-y2)*f.k, prec)
+	f.put(" l S\n")
 }
 
 // fillDrawOp corrects path painting operators
@@ -1133,7 +1163,16 @@ func fillDrawOp(styleStr string) (opStr string) {
 // draw color and line width centered on the rectangle's perimeter. Filling
 // uses the current fill color.
 func (f *Fpdf) Rect(x, y, w, h float64, styleStr string) {
-	f.outf("%.2f %.2f %.2f %.2f re %s", x*f.k, (f.h-y)*f.k, w*f.k, -h*f.k, fillDrawOp(styleStr))
+	// f.outf("%.2f %.2f %.2f %.2f re %s", x*f.k, (f.h-y)*f.k, w*f.k, -h*f.k, fillDrawOp(styleStr))
+	const prec = 2
+	f.putF64(x*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-y)*f.k, prec)
+	f.put(" ")
+	f.putF64(w*f.k, prec)
+	f.put(" ")
+	f.putF64(-h*f.k, prec)
+	f.put(" re " + fillDrawOp(styleStr) + "\n")
 }
 
 // RoundedRect outputs a rectangle of width w and height h with the upper left
@@ -1210,14 +1249,23 @@ func (f *Fpdf) Ellipse(x, y, rx, ry, degRotate float64, styleStr string) {
 // Filling uses the current fill color.
 func (f *Fpdf) Polygon(points []PointType, styleStr string) {
 	if len(points) > 2 {
+		const prec = 5
 		for j, pt := range points {
 			if j == 0 {
 				f.point(pt.X, pt.Y)
 			} else {
-				f.outf("%.5f %.5f l ", pt.X*f.k, (f.h-pt.Y)*f.k)
+				// f.outf("%.5f %.5f l ", pt.X*f.k, (f.h-pt.Y)*f.k)
+				f.putF64(pt.X*f.k, prec)
+				f.put(" ")
+				f.putF64((f.h-pt.Y)*f.k, prec)
+				f.put(" l \n")
 			}
 		}
-		f.outf("%.5f %.5f l ", points[0].X*f.k, (f.h-points[0].Y)*f.k)
+		// f.outf("%.5f %.5f l ", points[0].X*f.k, (f.h-points[0].Y)*f.k)
+		f.putF64(points[0].X*f.k, prec)
+		f.put(" ")
+		f.putF64((f.h-points[0].Y)*f.k, prec)
+		f.put(" l \n")
 		f.DrawPath(styleStr)
 	}
 }
@@ -1256,14 +1304,31 @@ func (f *Fpdf) Beziergon(points []PointType, styleStr string) {
 
 // point outputs current point
 func (f *Fpdf) point(x, y float64) {
-	f.outf("%.2f %.2f m", x*f.k, (f.h-y)*f.k)
+	// f.outf("%.2f %.2f m", x*f.k, (f.h-y)*f.k)
+	f.putF64(x*f.k, 2)
+	f.put(" ")
+	f.putF64((f.h-y)*f.k, 2)
+	f.put(" m\n")
 }
 
 // curve outputs a single cubic Bézier curve segment from current point
 func (f *Fpdf) curve(cx0, cy0, cx1, cy1, x, y float64) {
 	// Thanks, Robert Lillack, for straightening this out
-	f.outf("%.5f %.5f %.5f %.5f %.5f %.5f c", cx0*f.k, (f.h-cy0)*f.k, cx1*f.k,
-		(f.h-cy1)*f.k, x*f.k, (f.h-y)*f.k)
+	// f.outf("%.5f %.5f %.5f %.5f %.5f %.5f c", cx0*f.k, (f.h-cy0)*f.k, cx1*f.k,
+	// 	(f.h-cy1)*f.k, x*f.k, (f.h-y)*f.k)
+	const prec = 5
+	f.putF64(cx0*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-cy0)*f.k, prec)
+	f.put(" ")
+	f.putF64(cx1*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-cy1)*f.k, prec)
+	f.put(" ")
+	f.putF64(x*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-y)*f.k, prec)
+	f.put(" c\n")
 }
 
 // Curve draws a single-segment quadratic Bézier curve. The curve starts at
@@ -1281,8 +1346,17 @@ func (f *Fpdf) curve(cx0, cy0, cx1, cy1, x, y float64) {
 // The Circle() example demonstrates this method.
 func (f *Fpdf) Curve(x0, y0, cx, cy, x1, y1 float64, styleStr string) {
 	f.point(x0, y0)
-	f.outf("%.5f %.5f %.5f %.5f v %s", cx*f.k, (f.h-cy)*f.k, x1*f.k, (f.h-y1)*f.k,
-		fillDrawOp(styleStr))
+	// f.outf("%.5f %.5f %.5f %.5f v %s", cx*f.k, (f.h-cy)*f.k, x1*f.k, (f.h-y1)*f.k,
+	// 	fillDrawOp(styleStr))
+	const prec = 5
+	f.putF64(cx*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-cy)*f.k, prec)
+	f.put(" ")
+	f.putF64(x1*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-y1)*f.k, prec)
+	f.put(" v " + fillDrawOp(styleStr) + "\n")
 }
 
 // CurveCubic draws a single-segment cubic Bézier curve. This routine performs
@@ -1313,8 +1387,21 @@ func (f *Fpdf) CurveCubic(x0, y0, cx0, cy0, x1, y1, cx1, cy1 float64, styleStr s
 // The Circle() example demonstrates this method.
 func (f *Fpdf) CurveBezierCubic(x0, y0, cx0, cy0, cx1, cy1, x1, y1 float64, styleStr string) {
 	f.point(x0, y0)
-	f.outf("%.5f %.5f %.5f %.5f %.5f %.5f c %s", cx0*f.k, (f.h-cy0)*f.k,
-		cx1*f.k, (f.h-cy1)*f.k, x1*f.k, (f.h-y1)*f.k, fillDrawOp(styleStr))
+	//	f.outf("%.5f %.5f %.5f %.5f %.5f %.5f c %s", cx0*f.k, (f.h-cy0)*f.k,
+	//		cx1*f.k, (f.h-cy1)*f.k, x1*f.k, (f.h-y1)*f.k, fillDrawOp(styleStr))
+	const prec = 5
+	f.putF64(cx0*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-cy0)*f.k, prec)
+	f.put(" ")
+	f.putF64(cx1*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-cy1)*f.k, prec)
+	f.put(" ")
+	f.putF64(x1*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-y1)*f.k, prec)
+	f.put(" c " + fillDrawOp(styleStr) + "\n")
 }
 
 // Arc draws an elliptical arc centered at point (x, y). rx and ry specify its
@@ -1389,10 +1476,33 @@ func (f *Fpdf) SetAlpha(alpha float64, blendModeStr string) {
 }
 
 func (f *Fpdf) gradientClipStart(x, y, w, h float64) {
-	// Save current graphic state and set clipping area
-	f.outf("q %.2f %.2f %.2f %.2f re W n", x*f.k, (f.h-y)*f.k, w*f.k, -h*f.k)
-	// Set up transformation matrix for gradient
-	f.outf("%.5f 0 0 %.5f %.5f %.5f cm", w*f.k, h*f.k, x*f.k, (f.h-(y+h))*f.k)
+	{
+		const prec = 2
+		// Save current graphic state and set clipping area
+		// f.outf("q %.2f %.2f %.2f %.2f re W n", x*f.k, (f.h-y)*f.k, w*f.k, -h*f.k)
+		f.put("q ")
+		f.putF64(x*f.k, prec)
+		f.put(" ")
+		f.putF64((f.h-y)*f.k, prec)
+		f.put(" ")
+		f.putF64(w*f.k, prec)
+		f.put(" ")
+		f.putF64(-h*f.k, prec)
+		f.put(" re W n\n")
+	}
+	{
+		const prec = 5
+		// Set up transformation matrix for gradient
+		// f.outf("%.5f 0 0 %.5f %.5f %.5f cm", w*f.k, h*f.k, x*f.k, (f.h-(y+h))*f.k)
+		f.putF64(w*f.k, prec)
+		f.put(" 0 0 ")
+		f.putF64(h*f.k, prec)
+		f.put(" ")
+		f.putF64(x*f.k, prec)
+		f.put(" ")
+		f.putF64((f.h-(y+h))*f.k, prec)
+		f.put(" cm\n")
+	}
 }
 
 func (f *Fpdf) gradientClipEnd() {
@@ -1402,8 +1512,8 @@ func (f *Fpdf) gradientClipEnd() {
 
 func (f *Fpdf) gradient(tp, r1, g1, b1, r2, g2, b2 int, x1, y1, x2, y2, r float64) {
 	pos := len(f.gradientList)
-	clr1 := rgbColorValue(r1, g1, b1, "", "")
-	clr2 := rgbColorValue(r2, g2, b2, "", "")
+	clr1 := f.rgbColorValue(r1, g1, b1, "", "")
+	clr2 := f.rgbColorValue(r2, g2, b2, "", "")
 	f.gradientList = append(f.gradientList, gradientType{tp, clr1.str, clr2.str,
 		x1, y1, x2, y2, r, 0})
 	f.outf("/Sh%d sh", pos)
@@ -1466,7 +1576,17 @@ func (f *Fpdf) RadialGradient(x, y, w, h float64, r1, g1, b1, r2, g2, b2 int, x1
 // This ClipText() example demonstrates this method.
 func (f *Fpdf) ClipRect(x, y, w, h float64, outline bool) {
 	f.clipNest++
-	f.outf("q %.2f %.2f %.2f %.2f re W %s", x*f.k, (f.h-y)*f.k, w*f.k, -h*f.k, strIf(outline, "S", "n"))
+	// f.outf("q %.2f %.2f %.2f %.2f re W %s", x*f.k, (f.h-y)*f.k, w*f.k, -h*f.k, strIf(outline, "S", "n"))
+	const prec = 2
+	f.put("q ")
+	f.putF64(x*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-y)*f.k, prec)
+	f.put(" ")
+	f.putF64(w*f.k, prec)
+	f.put(" ")
+	f.putF64(-h*f.k, prec)
+	f.put(" re W " + strIf(outline, "S", "n") + "\n")
 }
 
 // ClipText begins a clipping operation in which rendering is confined to the
@@ -1479,13 +1599,36 @@ func (f *Fpdf) ClipRect(x, y, w, h float64, outline bool) {
 // restore unclipped operations.
 func (f *Fpdf) ClipText(x, y float64, txtStr string, outline bool) {
 	f.clipNest++
-	f.outf("q BT %.5f %.5f Td %d Tr (%s) Tj ET", x*f.k, (f.h-y)*f.k, intIf(outline, 5, 7), f.escape(txtStr))
+	// f.outf("q BT %.5f %.5f Td %d Tr (%s) Tj ET", x*f.k, (f.h-y)*f.k, intIf(outline, 5, 7), f.escape(txtStr))
+	const prec = 5
+	f.put("q BT ")
+	f.putF64(x*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-y)*f.k, prec)
+	f.put(" Td ")
+	f.putInt(intIf(outline, 5, 7))
+	f.put(" Tr (")
+	f.put(f.escape(txtStr))
+	f.put(") Tj ET\n")
 }
 
 func (f *Fpdf) clipArc(x1, y1, x2, y2, x3, y3 float64) {
 	h := f.h
-	f.outf("%.5f %.5f %.5f %.5f %.5f %.5f c ", x1*f.k, (h-y1)*f.k,
-		x2*f.k, (h-y2)*f.k, x3*f.k, (h-y3)*f.k)
+	// f.outf("%.5f %.5f %.5f %.5f %.5f %.5f c ", x1*f.k, (h-y1)*f.k,
+	// 	x2*f.k, (h-y2)*f.k, x3*f.k, (h-y3)*f.k)
+	const prec = 5
+	f.putF64(x1*f.k, prec)
+	f.put(" ")
+	f.putF64((h-y1)*f.k, prec)
+	f.put(" ")
+	f.putF64(x2*f.k, prec)
+	f.put(" ")
+	f.putF64((h-y2)*f.k, prec)
+	f.put(" ")
+	f.putF64(x3*f.k, prec)
+	f.put(" ")
+	f.putF64((h-y3)*f.k, prec)
+	f.put(" c \n")
 }
 
 // ClipRoundedRect begins a rectangular clipping operation. The rectangle is of
@@ -1519,28 +1662,50 @@ func (f *Fpdf) roundedRectPath(x, y, w, h, rTL, rTR, rBR, rBL float64) {
 	k := f.k
 	hp := f.h
 	myArc := (4.0 / 3.0) * (math.Sqrt2 - 1.0)
-	f.outf("q %.5f %.5f m", (x+rTL)*k, (hp-y)*k)
+	// f.outf("q %.5f %.5f m", (x+rTL)*k, (hp-y)*k)
+	const prec = 5
+	f.put("q ")
+	f.putF64((x+rTL)*k, prec)
+	f.put(" ")
+	f.putF64((hp-y)*k, prec)
+	f.put(" m\n")
 	xc := x + w - rTR
 	yc := y + rTR
-	f.outf("%.5f %.5f l", xc*k, (hp-y)*k)
+	// f.outf("%.5f %.5f l", xc*k, (hp-y)*k)
+	f.putF64(xc*k, prec)
+	f.put(" ")
+	f.putF64((hp-y)*k, prec)
+	f.put(" l\n")
 	if rTR != 0 {
 		f.clipArc(xc+rTR*myArc, yc-rTR, xc+rTR, yc-rTR*myArc, xc+rTR, yc)
 	}
 	xc = x + w - rBR
 	yc = y + h - rBR
-	f.outf("%.5f %.5f l", (x+w)*k, (hp-yc)*k)
+	// f.outf("%.5f %.5f l", (x+w)*k, (hp-yc)*k)
+	f.putF64((x+w)*k, prec)
+	f.put(" ")
+	f.putF64((hp-yc)*k, prec)
+	f.put(" l\n")
 	if rBR != 0 {
 		f.clipArc(xc+rBR, yc+rBR*myArc, xc+rBR*myArc, yc+rBR, xc, yc+rBR)
 	}
 	xc = x + rBL
 	yc = y + h - rBL
-	f.outf("%.5f %.5f l", xc*k, (hp-(y+h))*k)
+	// f.outf("%.5f %.5f l", xc*k, (hp-(y+h))*k)
+	f.putF64(xc*k, prec)
+	f.put(" ")
+	f.putF64((hp-(y+h))*k, prec)
+	f.put(" l\n")
 	if rBL != 0 {
 		f.clipArc(xc-rBL*myArc, yc+rBL, xc-rBL, yc+rBL*myArc, xc-rBL, yc)
 	}
 	xc = x + rTL
 	yc = y + rTL
-	f.outf("%.5f %.5f l", x*k, (hp-yc)*k)
+	// f.outf("%.5f %.5f l", x*k, (hp-yc)*k)
+	f.putF64(x*k, prec)
+	f.put(" ")
+	f.putF64((hp-yc)*k, prec)
+	f.put(" l\n")
 	if rTL != 0 {
 		f.clipArc(xc-rTL, yc-rTL*myArc, xc-rTL*myArc, yc-rTL, xc, yc-rTL)
 	}
@@ -1561,24 +1726,81 @@ func (f *Fpdf) ClipEllipse(x, y, rx, ry float64, outline bool) {
 	ly := (4.0 / 3.0) * ry * (math.Sqrt2 - 1)
 	k := f.k
 	h := f.h
-	f.outf("q %.5f %.5f m %.5f %.5f %.5f %.5f %.5f %.5f c",
-		(x+rx)*k, (h-y)*k,
-		(x+rx)*k, (h-(y-ly))*k,
-		(x+lx)*k, (h-(y-ry))*k,
-		x*k, (h-(y-ry))*k)
-	f.outf("%.5f %.5f %.5f %.5f %.5f %.5f c",
-		(x-lx)*k, (h-(y-ry))*k,
-		(x-rx)*k, (h-(y-ly))*k,
-		(x-rx)*k, (h-y)*k)
-	f.outf("%.5f %.5f %.5f %.5f %.5f %.5f c",
-		(x-rx)*k, (h-(y+ly))*k,
-		(x-lx)*k, (h-(y+ry))*k,
-		x*k, (h-(y+ry))*k)
-	f.outf("%.5f %.5f %.5f %.5f %.5f %.5f c W %s",
-		(x+lx)*k, (h-(y+ry))*k,
-		(x+rx)*k, (h-(y+ly))*k,
-		(x+rx)*k, (h-y)*k,
-		strIf(outline, "S", "n"))
+	//	f.outf("q %.5f %.5f m %.5f %.5f %.5f %.5f %.5f %.5f c",
+	//		(x+rx)*k, (h-y)*k,
+	//		(x+rx)*k, (h-(y-ly))*k,
+	//		(x+lx)*k, (h-(y-ry))*k,
+	//		x*k, (h-(y-ry))*k)
+	const prec = 5
+	f.put("q ")
+	f.putF64((x+rx)*k, prec)
+	f.put(" ")
+	f.putF64((h-y)*k, prec)
+	f.put(" m ")
+	f.putF64((x+rx)*k, prec)
+	f.put(" ")
+	f.putF64((h-(y-ly))*k, prec)
+	f.put(" ")
+	f.putF64((x+lx)*k, prec)
+	f.put(" ")
+	f.putF64((h-(y-ry))*k, prec)
+	f.put(" ")
+	f.putF64(x*k, prec)
+	f.put(" ")
+	f.putF64((h-(y-ry))*k, prec)
+	f.put(" c\n")
+
+	//	f.outf("%.5f %.5f %.5f %.5f %.5f %.5f c",
+	//		(x-lx)*k, (h-(y-ry))*k,
+	//		(x-rx)*k, (h-(y-ly))*k,
+	//		(x-rx)*k, (h-y)*k)
+	f.putF64((x-lx)*k, prec)
+	f.put(" ")
+	f.putF64((h-(y-ry))*k, prec)
+	f.put(" ")
+	f.putF64((x-rx)*k, prec)
+	f.put(" ")
+	f.putF64((h-(y-ly))*k, prec)
+	f.put(" ")
+	f.putF64((x-rx)*k, prec)
+	f.put(" ")
+	f.putF64((h-y)*k, prec)
+	f.put(" c\n")
+
+	//	f.outf("%.5f %.5f %.5f %.5f %.5f %.5f c",
+	//		(x-rx)*k, (h-(y+ly))*k,
+	//		(x-lx)*k, (h-(y+ry))*k,
+	//		x*k, (h-(y+ry))*k)
+	f.putF64((x-rx)*k, prec)
+	f.put(" ")
+	f.putF64((h-(y+ly))*k, prec)
+	f.put(" ")
+	f.putF64((x-lx)*k, prec)
+	f.put(" ")
+	f.putF64((h-(y+ry))*k, prec)
+	f.put(" ")
+	f.putF64(x*k, prec)
+	f.put(" ")
+	f.putF64((h-(y+ry))*k, prec)
+	f.put(" c\n")
+
+	//	f.outf("%.5f %.5f %.5f %.5f %.5f %.5f c W %s",
+	//		(x+lx)*k, (h-(y+ry))*k,
+	//		(x+rx)*k, (h-(y+ly))*k,
+	//		(x+rx)*k, (h-y)*k,
+	//		strIf(outline, "S", "n"))
+	f.putF64((x+lx)*k, prec)
+	f.put(" ")
+	f.putF64((h-(y+ry))*k, prec)
+	f.put(" ")
+	f.putF64((x+rx)*k, prec)
+	f.put(" ")
+	f.putF64((h-(y+ly))*k, prec)
+	f.put(" ")
+	f.putF64((x+rx)*k, prec)
+	f.put(" ")
+	f.putF64((h-y)*k, prec)
+	f.put(" c W " + strIf(outline, "S", "n") + "\n")
 }
 
 // ClipCircle begins a circular clipping operation. The circle is centered at
@@ -1707,7 +1929,7 @@ func (f *Fpdf) addFont(familyStr, styleStr, fileStr string, isUTF8 bool) {
 		originalSize := ttfStat.Size()
 		Type := "UTF8"
 		var utf8Bytes []byte
-		utf8Bytes, err = ioutil.ReadFile(fileStr)
+		utf8Bytes, err = os.ReadFile(fileStr)
 		if err != nil {
 			f.SetError(err)
 			return
@@ -1970,8 +2192,7 @@ func (f *Fpdf) AddFontFromReader(familyStr, styleStr string, r io.Reader) {
 	if ok {
 		return
 	}
-	var info fontDefType
-	info = f.loadfont(r)
+	info := f.loadfont(r)
 	if f.err != nil {
 		return
 	}
@@ -2000,7 +2221,6 @@ func (f *Fpdf) AddFontFromReader(familyStr, styleStr string, r io.Reader) {
 		}
 	}
 	f.fonts[fontkey] = info
-	return
 }
 
 // GetFontDesc returns the font descriptor, which can be used for
@@ -2118,7 +2338,6 @@ func (f *Fpdf) SetFont(familyStr, styleStr string, size float64) {
 	if f.page > 0 {
 		f.outf("BT /F%s %.2f Tf ET", f.currentFont.i, f.fontSizePt)
 	}
-	return
 }
 
 // SetFontStyle sets the style of the current font. See also SetFont()
@@ -2227,7 +2446,7 @@ func (f *Fpdf) Text(x, y float64, txtStr string) {
 			x -= f.GetStringWidth(txtStr)
 		}
 		txt2 = f.escape(utf8toutf16(txtStr, false))
-		for _, uni := range []rune(txtStr) {
+		for _, uni := range txtStr {
 			f.currentFont.usedRunes[int(uni)] = int(uni)
 		}
 	} else {
@@ -2353,7 +2572,9 @@ func (f *Fpdf) CellFormat(w, h float64, txtStr, borderStr string, ln int,
 		f.x = x
 		if ws > 0 {
 			f.ws = ws
-			f.outf("%.3f Tw", ws*k)
+			// f.outf("%.3f Tw", ws*k)
+			f.putF64(ws*k, 3)
+			f.put(" Tw\n")
 		}
 	}
 	if w == 0 {
@@ -2438,7 +2659,7 @@ func (f *Fpdf) CellFormat(w, h float64, txtStr, borderStr string, ln int,
 				txtStr = reverseText(txtStr)
 			}
 			wmax := int(math.Ceil((w - 2*f.cMargin) * 1000 / f.fontSize))
-			for _, uni := range []rune(txtStr) {
+			for _, uni := range txtStr {
 				f.currentFont.usedRunes[int(uni)] = int(uni)
 			}
 			space := f.escape(utf8toutf16(" ", false))
@@ -2463,7 +2684,7 @@ func (f *Fpdf) CellFormat(w, h float64, txtStr, borderStr string, ln int,
 					txtStr = reverseText(txtStr)
 				}
 				txt2 = f.escape(utf8toutf16(txtStr, false))
-				for _, uni := range []rune(txtStr) {
+				for _, uni := range txtStr {
 					f.currentFont.usedRunes[int(uni)] = int(uni)
 				}
 			} else {
@@ -2505,7 +2726,6 @@ func (f *Fpdf) CellFormat(w, h float64, txtStr, borderStr string, ln int,
 	} else {
 		f.x += w
 	}
-	return
 }
 
 // Revert string to use in RTL languages
@@ -2754,7 +2974,9 @@ func (f *Fpdf) MultiCell(w, h float64, txtStr, borderStr, alignStr string, fill 
 					} else {
 						f.ws = 0
 					}
-					f.outf("%.3f Tw", f.ws*f.k)
+					// f.outf("%.3f Tw", f.ws*f.k)
+					f.putF64(f.ws*f.k, 3)
+					f.put(" Tw\n")
 				}
 				if f.isCurrentUTF8 {
 					f.CellFormat(w, h, string(srune[j:sep]), b, 2, alignStr, fill, 0, "")
@@ -3069,7 +3291,17 @@ func (f *Fpdf) imageOut(info *ImageInfoType, x, y, w, h float64, allowNegativeX,
 	}
 	// dbg("h %.2f", h)
 	// q 85.04 0 0 NaN 28.35 NaN cm /I2 Do Q
-	f.outf("q %.5f 0 0 %.5f %.5f %.5f cm /I%s Do Q", w*f.k, h*f.k, x*f.k, (f.h-(y+h))*f.k, info.i)
+	// f.outf("q %.5f 0 0 %.5f %.5f %.5f cm /I%s Do Q", w*f.k, h*f.k, x*f.k, (f.h-(y+h))*f.k, info.i)
+	const prec = 5
+	f.put("q ")
+	f.putF64(w*f.k, prec)
+	f.put(" 0 0 ")
+	f.putF64(h*f.k, prec)
+	f.put(" ")
+	f.putF64(x*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-(y+h))*f.k, prec)
+	f.put(" cm /I" + info.i + " Do Q\n")
 	if link > 0 || len(linkStr) > 0 {
 		f.newLink(x, y, w, h, link, linkStr)
 	}
@@ -3132,7 +3364,6 @@ func (f *Fpdf) ImageOptions(imageNameStr string, x, y, w, h float64, flow bool, 
 		return
 	}
 	f.imageOut(info, x, y, w, h, options.AllowNegativePosition, flow, link, linkStr)
-	return
 }
 
 // RegisterImageReader registers an image, reading it from Reader r, adding it
@@ -3447,8 +3678,11 @@ func (f *Fpdf) SetProtection(actionFlag byte, userPassStr, ownerPassStr string) 
 // method will close both f and w, even if an error is detected and no document
 // is produced.
 func (f *Fpdf) OutputAndClose(w io.WriteCloser) error {
-	f.Output(w)
-	w.Close()
+	_ = f.Output(w)
+	err := w.Close()
+	if err != nil {
+		return fmt.Errorf("could not close writer: %w", err)
+	}
 	return f.err
 }
 
@@ -3458,15 +3692,23 @@ func (f *Fpdf) OutputAndClose(w io.WriteCloser) error {
 //
 // Most examples demonstrate the use of this method.
 func (f *Fpdf) OutputFileAndClose(fileStr string) error {
-	if f.err == nil {
-		pdfFile, err := os.Create(fileStr)
-		if err == nil {
-			f.Output(pdfFile)
-			pdfFile.Close()
-		} else {
-			f.err = err
-		}
+	if f.err != nil {
+		return f.err
 	}
+
+	pdfFile, err := os.Create(fileStr)
+	if err != nil {
+		f.err = err
+		return f.err
+	}
+
+	_ = f.Output(pdfFile)
+
+	err = pdfFile.Close()
+	if err != nil {
+		return fmt.Errorf("could not close output file: %w", err)
+	}
+
 	return f.err
 }
 
@@ -3513,13 +3755,6 @@ func (f *Fpdf) GetPageSizeStr(sizeStr string) (size SizeType) {
 	return f.getpagesizestr(sizeStr)
 }
 
-func (f *Fpdf) _getpagesize(size SizeType) SizeType {
-	if size.Wd > size.Ht {
-		size.Wd, size.Ht = size.Ht, size.Wd
-	}
-	return size
-}
-
 func (f *Fpdf) beginpage(orientationStr string, size SizeType) {
 	if f.err != nil {
 		return
@@ -3531,7 +3766,7 @@ func (f *Fpdf) beginpage(orientationStr string, size SizeType) {
 		f.pageBoxes[f.page][box] = pb
 	}
 	f.pages = append(f.pages, bytes.NewBufferString(""))
-	f.pageLinks = append(f.pageLinks, make([]linkType, 0, 0))
+	f.pageLinks = append(f.pageLinks, make([]linkType, 0))
 	f.pageAttachments = append(f.pageAttachments, []annotationAttach{})
 	f.state = 2
 	f.x = f.lMargin
@@ -3561,7 +3796,6 @@ func (f *Fpdf) beginpage(orientationStr string, size SizeType) {
 	if orientationStr != f.defOrientation || size.Wd != f.defPageSize.Wd || size.Ht != f.defPageSize.Ht {
 		f.pageSizes[f.page] = SizeType{f.wPt, f.hPt}
 	}
-	return
 }
 
 func (f *Fpdf) endpage() {
@@ -3646,14 +3880,6 @@ func (f *Fpdf) dostrikeout(x, y float64, txt string) string {
 		(f.h-(y+4*up/1000*f.fontSize))*f.k, w*f.k, -ut/1000*f.fontSizePt)
 }
 
-func bufEqual(buf []byte, str string) bool {
-	return string(buf[0:len(str)]) == str
-}
-
-func be16(buf []byte) int {
-	return 256*int(buf[0]) + int(buf[1])
-}
-
 func (f *Fpdf) newImageInfo() *ImageInfoType {
 	// default dpi to 72 unless told otherwise
 	return &ImageInfoType{scale: f.k, dpi: 72}
@@ -3699,7 +3925,7 @@ func (f *Fpdf) parsejpg(r io.Reader) (info *ImageInfoType) {
 
 // parsepng extracts info from a PNG data
 func (f *Fpdf) parsepng(r io.Reader, readdpi bool) (info *ImageInfoType) {
-	buf, err := bufferFromReader(r)
+	buf, err := newRBuffer(r)
 	if err != nil {
 		f.err = err
 		return
@@ -3707,25 +3933,9 @@ func (f *Fpdf) parsepng(r io.Reader, readdpi bool) (info *ImageInfoType) {
 	return f.parsepngstream(buf, readdpi)
 }
 
-func (f *Fpdf) readBeInt32(r io.Reader) (val int32) {
-	err := binary.Read(r, binary.BigEndian, &val)
-	if err != nil && err != io.EOF {
-		f.err = err
-	}
-	return
-}
-
-func (f *Fpdf) readByte(r io.Reader) (val byte) {
-	err := binary.Read(r, binary.BigEndian, &val)
-	if err != nil {
-		f.err = err
-	}
-	return
-}
-
 // parsegif extracts info from a GIF data (via PNG conversion)
 func (f *Fpdf) parsegif(r io.Reader) (info *ImageInfoType) {
-	data, err := bufferFromReader(r)
+	data, err := newRBuffer(r)
 	if err != nil {
 		f.err = err
 		return
@@ -3742,7 +3952,7 @@ func (f *Fpdf) parsegif(r io.Reader) (info *ImageInfoType) {
 		f.err = err
 		return
 	}
-	return f.parsepngstream(pngBuf, false)
+	return f.parsepngstream(&rbuffer{p: pngBuf.Bytes()}, false)
 }
 
 // newobj begins a new object
@@ -3769,22 +3979,30 @@ func (f *Fpdf) putstream(b []byte) {
 // out; Add a line to the document
 func (f *Fpdf) out(s string) {
 	if f.state == 2 {
+		must(f.pages[f.page].WriteString(s))
+		must(f.pages[f.page].WriteString("\n"))
+	} else {
+		must(f.buffer.WriteString(s))
+		must(f.buffer.WriteString("\n"))
+	}
+}
+
+func (f *Fpdf) put(s string) {
+	if f.state == 2 {
 		f.pages[f.page].WriteString(s)
-		f.pages[f.page].WriteString("\n")
 	} else {
 		f.buffer.WriteString(s)
-		f.buffer.WriteString("\n")
 	}
 }
 
 // outbuf adds a buffered line to the document
 func (f *Fpdf) outbuf(r io.Reader) {
 	if f.state == 2 {
-		f.pages[f.page].ReadFrom(r)
-		f.pages[f.page].WriteString("\n")
+		must64(f.pages[f.page].ReadFrom(r))
+		must(f.pages[f.page].WriteString("\n"))
 	} else {
-		f.buffer.ReadFrom(r)
-		f.buffer.WriteString("\n")
+		must64(f.buffer.ReadFrom(r))
+		must(f.buffer.WriteString("\n"))
 	}
 }
 
@@ -3807,6 +4025,23 @@ func (f *Fpdf) RawWriteBuf(r io.Reader) {
 // outf adds a formatted line to the document
 func (f *Fpdf) outf(fmtStr string, args ...interface{}) {
 	f.out(sprintf(fmtStr, args...))
+}
+
+func (f *Fpdf) putF64(v float64, prec int) {
+	f.put(f.fmtF64(v, prec))
+}
+
+// fmtF64 converts the floating-point number f to a string with precision prec.
+func (f *Fpdf) fmtF64(v float64, prec int) string {
+	return string(strconv.AppendFloat(f.fmt.buf[:0], v, 'f', prec, 64))
+}
+
+func (f *Fpdf) putInt(v int) {
+	f.put(f.fmtInt(v))
+}
+
+func (f *Fpdf) fmtInt(v int) string {
+	return string(strconv.AppendInt(f.fmt.buf[:0], int64(v), 10))
 }
 
 // SetDefaultCatalogSort sets the default value of the catalog sort flag that
@@ -3955,9 +4190,11 @@ func (f *Fpdf) putpages() {
 		// Page content
 		f.newobj()
 		if f.compress {
-			data := sliceCompress(f.pages[n].Bytes())
+			mem := xmem.compress(f.pages[n].Bytes())
+			data := mem.bytes()
 			f.outf("<</Filter /FlateDecode /Length %d>>", len(data))
 			f.putstream(data)
+			mem.release()
 		} else {
 			f.outf("<</Length %d>>", f.pages[n].Len())
 			f.putstream(f.pages[n].Bytes())
@@ -4124,7 +4361,6 @@ func (f *Fpdf) putfonts() {
 				delete(usedRunes, 0)
 				utf8FontStream := font.utf8File.GenerateCutFont(usedRunes)
 				utf8FontSize := len(utf8FontStream)
-				compressedFontStream := sliceCompress(utf8FontStream)
 				CodeSignDictionary := font.utf8File.CodeSymbolDictionary
 				delete(CodeSignDictionary, 0)
 
@@ -4135,7 +4371,7 @@ func (f *Fpdf) putfonts() {
 				f.out("<</Type /Font\n/Subtype /CIDFontType2\n/BaseFont /" + fontName + "\n" +
 					"/CIDSystemInfo " + strconv.Itoa(f.n+2) + " 0 R\n/FontDescriptor " + strconv.Itoa(f.n+3) + " 0 R")
 				if font.Desc.MissingWidth != 0 {
-					f.out("/DW " + strconv.Itoa(font.Desc.MissingWidth) + "")
+					f.out("/DW " + strconv.Itoa(font.Desc.MissingWidth))
 				}
 				f.generateCIDFontMap(&font, font.utf8File.LastRune)
 				f.out("/CIDToGIDMap " + strconv.Itoa(f.n+4) + " 0 R>>")
@@ -4179,13 +4415,17 @@ func (f *Fpdf) putfonts() {
 					cidToGidMap[cc*2+1] = byte(glyph & 0xFF)
 				}
 
-				cidToGidMap = sliceCompress(cidToGidMap)
+				mem := xmem.compress(cidToGidMap)
+				cidToGidMap = mem.bytes()
 				f.newobj()
 				f.out("<</Length " + strconv.Itoa(len(cidToGidMap)) + "/Filter /FlateDecode>>")
 				f.putstream(cidToGidMap)
 				f.out("endobj")
+				mem.release()
 
 				//Font file
+				mem = xmem.compress(utf8FontStream)
+				compressedFontStream := mem.bytes()
 				f.newobj()
 				f.out("<</Length " + strconv.Itoa(len(compressedFontStream)))
 				f.out("/Filter /FlateDecode")
@@ -4193,13 +4433,13 @@ func (f *Fpdf) putfonts() {
 				f.out(">>")
 				f.putstream(compressedFontStream)
 				f.out("endobj")
+				mem.release()
 			default:
 				f.err = fmt.Errorf("unsupported font type: %s", tp)
 				return
 			}
 		}
 	}
-	return
 }
 
 func (f *Fpdf) generateCIDFontMap(font *fontDefType, LastRune int) {
@@ -4344,14 +4584,14 @@ func (f *Fpdf) loadFontFile(name string) ([]byte, error) {
 	if f.fontLoader != nil {
 		reader, err := f.fontLoader.Open(name)
 		if err == nil {
-			data, err := ioutil.ReadAll(reader)
+			data, err := io.ReadAll(reader)
 			if closer, ok := reader.(io.Closer); ok {
 				closer.Close()
 			}
 			return data, err
 		}
 	}
-	return ioutil.ReadFile(path.Join(f.fontpath, name))
+	return os.ReadFile(path.Join(f.fontpath, name))
 }
 
 func (f *Fpdf) putimages() {
@@ -4441,9 +4681,11 @@ func (f *Fpdf) putimage(info *ImageInfoType) {
 	if info.cs == "Indexed" {
 		f.newobj()
 		if f.compress {
-			pal := sliceCompress(info.pal)
+			mem := xmem.compress(info.pal)
+			pal := mem.bytes()
 			f.outf("<</Filter /FlateDecode /Length %d>>", len(pal))
 			f.putstream(pal)
+			mem.release()
 		} else {
 			f.outf("<</Length %d>>", len(info.pal))
 			f.putstream(info.pal)
@@ -4625,7 +4867,6 @@ func (f *Fpdf) putresources() {
 		f.out(">>")
 		f.out("endobj")
 	}
-	return
 }
 
 // returns Now() if tm is zero
@@ -4836,7 +5077,6 @@ func (f *Fpdf) enddoc() {
 	f.outf("%d", o)
 	f.out("%%EOF")
 	f.state = 3
-	return
 }
 
 // Path Drawing
@@ -4862,7 +5102,14 @@ func (f *Fpdf) MoveTo(x, y float64) {
 //
 // The MoveTo() example demonstrates this method.
 func (f *Fpdf) LineTo(x, y float64) {
-	f.outf("%.2f %.2f l", x*f.k, (f.h-y)*f.k)
+	// f.outf("%.2f %.2f l", x*f.k, (f.h-y)*f.k)
+	const prec = 2
+	f.putF64(x*f.k, prec)
+	f.put(" ")
+
+	f.putF64((f.h-y)*f.k, prec)
+	f.put(" l\n")
+
 	f.x, f.y = x, y
 }
 
@@ -4875,7 +5122,16 @@ func (f *Fpdf) LineTo(x, y float64) {
 //
 // The MoveTo() example demonstrates this method.
 func (f *Fpdf) CurveTo(cx, cy, x, y float64) {
-	f.outf("%.5f %.5f %.5f %.5f v", cx*f.k, (f.h-cy)*f.k, x*f.k, (f.h-y)*f.k)
+	// f.outf("%.5f %.5f %.5f %.5f v", cx*f.k, (f.h-cy)*f.k, x*f.k, (f.h-y)*f.k)
+	const prec = 5
+	f.putF64(cx*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-cy)*f.k, prec)
+	f.put(" ")
+	f.putF64(x*f.k, prec)
+	f.put(" ")
+	f.putF64((f.h-y)*f.k, prec)
+	f.put(" v\n")
 	f.x, f.y = x, y
 }
 
@@ -4960,9 +5216,25 @@ func (f *Fpdf) arc(x, y, rx, ry, degRotate, degStart, degEnd float64,
 	dtm := dt / 3
 	if degRotate != 0 {
 		a := -degRotate * math.Pi / 180
-		f.outf("q %.5f %.5f %.5f %.5f %.5f %.5f cm",
-			math.Cos(a), -1*math.Sin(a),
-			math.Sin(a), math.Cos(a), x, y)
+		sin, cos := math.Sincos(a)
+		//	f.outf("q %.5f %.5f %.5f %.5f %.5f %.5f cm",
+		//		math.Cos(a), -1*math.Sin(a),
+		//		math.Sin(a), math.Cos(a), x, y)
+		const prec = 5
+		f.put("q ")
+		f.putF64(cos, prec)
+		f.put(" ")
+		f.putF64(-1*sin, prec)
+		f.put(" ")
+		f.putF64(sin, prec)
+		f.put(" ")
+		f.putF64(cos, prec)
+		f.put(" ")
+		f.putF64(x, prec)
+		f.put(" ")
+		f.putF64(y, prec)
+		f.put(" cm\n")
+
 		x = 0
 		y = 0
 	}

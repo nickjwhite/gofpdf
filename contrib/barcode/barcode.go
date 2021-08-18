@@ -34,8 +34,8 @@ import (
 	"github.com/boombuler/barcode/ean"
 	"github.com/boombuler/barcode/qr"
 	"github.com/boombuler/barcode/twooffive"
-	"github.com/phpdave11/gofpdf"
-	"github.com/ruudk/golang-pdf417"
+	"github.com/go-pdf/fpdf"
+	pdf417 "github.com/ruudk/golang-pdf417"
 )
 
 // barcodes represents the barcodes that have been registered through this
@@ -50,9 +50,9 @@ var barcodes struct {
 // functions that are required to add the barcode to the PDF.
 type barcodePdf interface {
 	GetConversionRatio() float64
-	GetImageInfo(imageStr string) *gofpdf.ImageInfoType
+	GetImageInfo(imageStr string) *fpdf.ImageInfoType
 	Image(imageNameStr string, x, y, w, h float64, flow bool, tp string, link int, linkStr string)
-	RegisterImageReader(imgName, tp string, r io.Reader) *gofpdf.ImageInfoType
+	RegisterImageReader(imgName, tp string, r io.Reader) *fpdf.ImageInfoType
 	SetError(err error)
 }
 
@@ -284,16 +284,16 @@ func registerScaledBarcode(pdf barcodePdf, code string, bcode barcode.Barcode) e
 	return nil
 }
 
-// convertTo96DPI converts the given value, which is based on a 72 DPI value
-// like the rest of the PDF document, to a 96 DPI value that is required for
-// an Image.
-//
-// Doing this through the Fpdf.Image() function would mean that it uses a 72 DPI
-// value and stretches it to a 96 DPI value. This results in quality loss which
-// could be problematic for barcode scanners.
-func convertTo96Dpi(pdf barcodePdf, value float64) float64 {
-	return value * pdf.GetConversionRatio() / 72 * 96
-}
+// // convertTo96DPI converts the given value, which is based on a 72 DPI value
+// // like the rest of the PDF document, to a 96 DPI value that is required for
+// // an Image.
+// //
+// // Doing this through the Fpdf.Image() function would mean that it uses a 72 DPI
+// // value and stretches it to a 96 DPI value. This results in quality loss which
+// // could be problematic for barcode scanners.
+// func convertTo96Dpi(pdf barcodePdf, value float64) float64 {
+// 	return value * pdf.GetConversionRatio() / 72 * 96
+// }
 
 // convertFrom96Dpi converts the given value, which is based on a 96 DPI value
 // required for an Image, to a 72 DPI value like the rest of the PDF document.
