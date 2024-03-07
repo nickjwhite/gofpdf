@@ -352,6 +352,9 @@ func (f *Fpdf) SetCellMargin(margin float64) {
 // of some text into of a cell of a given width.
 func (f *Fpdf) SetCellStretchToFit(w float64, txtStr string) {
 	stringW := f.GetStringWidth(txtStr)
+	if stringW == 0 {
+		return
+	}
 	margin := f.GetCellMargin()
 	ratio := (w - margin * 2) / stringW
 	f.outf("BT %.0f Tz ET", ratio * 100)
